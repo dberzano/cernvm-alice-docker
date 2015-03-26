@@ -8,8 +8,8 @@ $(dirname "$0")/overlay.sh
 #cvm_prefix='/cvmfs/cernvm-prod.cern.ch/cvm3'
 #cvm_prefix='/tmp/overlay/cvm3/mnt'
 cvm_prefix="/tmp/overlay_${USER}/cvm3/mnt"
+#cvm_docker_image='dberzano/cernvm:0.1'
 cvm_docker_image='dberzano/cernvm'
-cvm_docker_image=98827f6d0f61
 
 bind_mounts=''
 
