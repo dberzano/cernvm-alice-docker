@@ -32,6 +32,20 @@ docker tag a81ca84cd833 dberzano/cernvm:0.2
 **Note:** we are not using `-f` (for *force*) in the second command as we do not
 want to accidentally overwrite an existing tag.
 
+See how thin our image is with the command:
+
+```
+docker images
+```
+
+Only **801 B**!
+
+```
+REPOSITORY              TAG                 IMAGE ID            CREATED             VIRTUAL SIZE
+dberzano/cernvm         0.2                 a81ca84cd833        7 minutes ago       801 B
+dberzano/cernvm         latest              a81ca84cd833        7 minutes ago       801 B
+```
+
 
 ## Cleaning up images
 
