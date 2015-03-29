@@ -223,21 +223,20 @@ function dcvm_mount() (
       # Check how many bind mounts we have
       cvm_num_bind_mounts=$( cat /etc/mtab | grep -c "^${cvm_root} " )
       r=0
-      if [[ $cvm_num_bind_mounts == 0 && $cvm_main_is_mounted == 1 ]] ; then
 
+      if [[ $cvm_num_bind_mounts == 0 && $cvm_main_is_mounted == 1 ]] ; then
         wrap \
           "Unmounting main CernVM branch ${cvm_branch}" \
           umount "$cvm_main_mntpoint"
         r=$?
-        if [[ $r == 0 ]] ; then
-          wrap \
-            "Mounting main CernVM branch ${cvm_branch}" \
-            mount -t cvmfs -o "$cvm_mntopt" "$cvm_branch" "$cvm_main_mntpoint"
-          r=$?
-        fi
+      fi
 
-      #else
-      #  # Not attempting to unmount/remount the main CernVM repository
+      if [[ $cvm_main_is_mounted == 0 || $r == 0 ]] ; then
+        # Execute only if it was not mounted, or if the prev. command was successful
+        wrap \
+          "Mounting main CernVM branch ${cvm_branch}" \
+          mount -t cvmfs -o "$cvm_mntopt" "$cvm_branch" "$cvm_main_mntpoint"
+        r=$?
       fi
 
       ### /cvm ###
