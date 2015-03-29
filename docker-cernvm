@@ -1,0 +1,181 @@
+#!/bin/bash
+
+# docker-cernvm -- by Dario Berzano <dario.berzano@cern.ch>
+#
+# Using Docker overlay with the CernVM operating system
+
+# Color definitions
+export Cc="\033[36m"
+export Cm="\033[35m"
+export Cy="\033[33m"
+export Cb="\033[34m"
+export Cr="\033[31m"
+export Cg="\033[32m"
+export Cz="\033[m"
+
+# Automatic variables (do not edit)
+prog="$( basename "$0" )"
+exec_prefix="$( dirname "$0" )"
+exec_prefix="$( cd "$exec_prefix" ; pwd )"
+dry=0
+
+# General-purpose variables
+cvm_docker_build_dir="${exec_prefix}/docker-build/"
+docker_prefix='/var/lib/docker'
+
+# Echo
+function pe() (
+  echo -e "$@" >&2
+)
+
+# Echo without newline
+function pen() (
+  echo -e -n "$@" >&2
+)
+
+# Wrap a command, prints it on screen before executing it. Execute it for real
+# only if dry=0. Preserve its exit state.
+#
+# Usage: wrap <msg> <cmd> [param1 [param2 [param3...]]]
+function wrap() {
+  local r
+  local err=$(mktemp)
+  local out
+  local msg
+  local preserve_out=0
+
+  if [[ $1 == --out ]] ; then
+    preserve_out=1
+    shift
+  else
+    out=$(mktemp)
+  fi
+
+  msg="$1"
+  shift
+
+  pen "[....] ${Cc}${msg}${Cz}"
+
+  # Dry run?
+  if [[ $dry == 0 ]] ; then
+    if [[ $preserve_out == 1 ]] ; then
+      # Keep output on stdout
+      "$@" 2> "$err"
+      r=$?
+    else
+      "$@" > "$out" 2> "$err"
+      r=$?
+    fi
+  else
+    r=0
+  fi
+
+  if [[ $dry == 1 ]] ; then
+    pe "\r[${Cy}FAKE${Cz}]"
+  elif [[ $r == 0 ]] ; then
+    pe "\r[ ${Cg}OK${Cz} ]"
+  else
+    pe "\r[${Cr}FAIL${Cz}]"
+
+    pe "\n${Cy}=== COMMAND FAILED === ${Cz}"
+    pe "${Cm}Command: ${Cr}${@}${Cz}"
+    pe "${Cm}Exit code: ${Cr}${r}${Cz}"
+
+    if [[ $out != '' && -s $out ]] ; then
+      pe "\n${Cy}=== STDOUT === ${Cz}"
+      cat "$out" >&2
+    fi
+
+    if [[ -s $err ]] ; then
+      pe "\n${Cy}=== STDERR === ${Cz}"
+      cat "$err" >&2
+    fi
+
+    pe ''
+  fi
+
+  rm -f "$err"
+  [[ $out != '' ]] && rm -f "$out"
+
+  return $r
+}
+
+# Gets the image id.
+function get_image_id() (
+  local repotag="$1"
+  local tag=$( echo "$repotag" | cut -d: -f2 )
+  local repo=$( echo "$repotag" | cut -d: -f1 )
+  local image_id
+  if [[ $tag == '' ]] ; then
+    repotag="${repo}:latest"
+  fi
+  image_id=$( docker images -q --no-trunc "$repotag" )
+  r=$?
+  if [[ $image_id == '' || $r != 0 ]] ; then
+    return 1
+  fi
+  echo "$image_id"
+  return 0
+)
+
+# Register a dummy Docker CernVM image, to be used later as a disposable one.
+# $1: repository[:tag], in Docker's format
+function register() (
+  local tag="$1"
+  local image_id
+  local r
+  wrap "Registering CernVM dummy image to Docker as \"$tag\"" \
+    docker build --tag "$tag" "$cvm_docker_build_dir"
+  r=$?
+  if [[ $r == 0 ]] ; then
+    image_id=$( wrap --out "Fetching Image ID for \"$tag\"" get_image_id "$tag" )
+    r=$?
+    if [[ $r == 0 ]] ; then
+      pe "Image ${Cc}${tag}${Cz} registered as ${Cg}${image_id}${Cz}"
+    fi
+  fi
+  return $r
+)
+
+# The main function
+function main() (
+
+  local action
+  local tag
+  local r
+
+  while [[ $# -gt 0 ]] ; do
+    case "${1}" in
+      --tag)
+        tag="$2"
+        shift 2
+      ;;
+      *)
+        break
+      ;;
+    esac
+  done
+
+  action="$1"
+  if [[ $action == register || $action == run ]] ; then
+    if [[ $tag == '' ]] ; then
+      pe "Argument ${Cr}--tag${Cz} is mandatory."
+      r=1
+    else
+      $action "$tag"
+      r=$?
+    fi
+  elif [[ $action == mount ]] ; then
+    mount
+    r=$?
+  else
+    pe "Action unknown or unspecified: \"${Cr}${action}${Cz}\"."
+    pe "Usage: ${Cm}${prog}${Cz} [${Cc}--tag ${Cm}<tagname>${Cz}] [${Cc}register${Cz}|${Cc}run${Cz}|${Cc}mount${Cz}]"
+    r=1
+  fi
+
+  return $r
+)
+
+# Entry point
+main "$@" || exit $?
