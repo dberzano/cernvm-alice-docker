@@ -8,8 +8,8 @@ COPY THIS_IS_A_CERNVM_MOUNT_POINT /THIS_IS_A_CERNVM_MOUNT_POINT
 # provided on the command line via "docker run".
 #
 # If no command is provided, the command specified by CMD is executed.
-#CMD [ "/bin/bash" ]
-ENTRYPOINT [ "/bin/bash" ]
+CMD [ "/bin/bash" ]
+#ENTRYPOINT [ "/bin/bash" ]
 
 # From https://docs.docker.com/reference/builder/
 #
