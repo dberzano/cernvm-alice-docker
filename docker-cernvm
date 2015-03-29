@@ -20,7 +20,10 @@ exec_prefix="$( cd "$exec_prefix" ; pwd )"
 dry=0
 
 # General-purpose variables
-cvm_root='/cvmfs/cernvm-prod.cern.ch/cvm3'
+cvm_branch='cernvm-prod.cern.ch'
+cvm_main_mntpoint="/mnt/static_cernvm_${cvm_branch}"
+cvm_root="${cvm_main_mntpoint}/cvm3"
+cvm_mntopt='allow_other,grab_mountpoint'
 cvm_docker_build_dir="${exec_prefix}/docker-build"
 docker_prefix='/var/lib/docker'
 cvm_placeholder='THIS_IS_A_CERNVM_MOUNT_POINT'
@@ -173,8 +176,8 @@ function dcvm_mount() (
 
     layer_path="${docker_prefix}/aufs/diff/${layer_id}"
 
-    if cat /proc/mounts 2> /dev/null | grep -q "$layer_path" ; then
-      # This layer is already mounted
+    if cat /etc/mtab 2> /dev/null | grep -qE "^${cvm_root} ${layer_path} " ; then
+      # This layer is already bind-mounted
       found=1
       already_mounted=1
       break
@@ -190,22 +193,85 @@ function dcvm_mount() (
     pe "Cannot find a suitable layer to overlay with CernVM for ${Cr}${tag}${Cz}"
     r=1
   else
-    # Mount operations here
+
 
     if [[ $already_mounted == 1 ]] ; then
-      wrap --non-fatal "Layer ${layer_id} already mounted: trying to unmount first" \umount "$layer_path"
-      [[ $? == 0 ]] && already_mounted=0
+
+      #pe "already bind-mounted: try to unmount it first (errors are non-fatal)"
+
+      wrap --non-fatal \
+        "Found layer ${layer_id} already mounted: trying to unmount first" \
+        umount "$layer_path"
+      if [[ $? == 0 ]] ; then
+        # We have unmounted it successfully
+        already_mounted=0
+      fi
+
     fi
 
+    # See again if now it is already mounted. If not, try to mount it. In this case, errors are
+    # considered fatal
     if [[ $already_mounted == 0 ]] ; then
-      wrap "Mounting CernVM root fs over ${layer_id}" \mount --bind "$cvm_root" "$layer_path"
-      r=$?
-      if [[ $r == 0 ]] ; then
-        pe "Freshly mounted over layer ${Cg}${layer_id}${Cz}."
-      fi
-    else
-      pe "Reusing existing mountpoint over layer ${Cy}${layer_id}${Cz}."
+
+      ### cvm ###
+
+      # Check if the main mountpoint is mounted
+      cvm_main_is_mounted=0
+      grep -qE "^cvmfs2 ${cvm_main_mntpoint} " /etc/mtab
+      [[ $? == 0 ]] && cvm_main_is_mounted=1
+
+      # Check how many bind mounts we have
+      cvm_num_bind_mounts=$( cat /etc/mtab | grep -c "^${cvm_root} " )
       r=0
+      if [[ $cvm_num_bind_mounts == 0 && $cvm_main_is_mounted == 1 ]] ; then
+
+        wrap \
+          "Unmounting main CernVM branch ${cvm_branch}" \
+          umount "$cvm_main_mntpoint"
+        r=$?
+        if [[ $r == 0 ]] ; then
+          wrap \
+            "Mounting main CernVM branch ${cvm_branch}" \
+            mount -t cvmfs -o "$cvm_mntopt" "$cvm_branch" "$cvm_main_mntpoint"
+          r=$?
+        fi
+
+      #else
+      #  # Not attempting to unmount/remount the main CernVM repository
+      fi
+
+      ### /cvm ###
+
+      if [[ $r == 0 ]] ; then
+
+        wrap \
+          "Bind-mounting CernVM branch ${cvm_branch} over ${layer_id}" \
+          mount --bind "$cvm_root" "$layer_path"
+        r=$?
+
+        if [[ $r == 0 ]] ; then
+          pe "Layer ${Cg}${layer_id}${Cz} freshly mounted."
+        else
+          pe "${Cr}Error:${Cz} cannot bind mount over ${Cr}${layer_id}${Cz}!"
+        fi
+
+      else
+
+          pe "${Cr}Error:${Cz} cannot umount/remount CernVM branch ${Cr}${cvm_branch}${Cz}!"
+
+      fi
+
+    else
+
+      pe "Reusing existing layer mount ${Cy}${layer_id}${Cz}."
+      r=0
+
+    fi
+
+    if [[ $r == 0 ]] ; then
+      # Info about CernVM snapshot in use
+      cvm_snapshot=$( basename "$layer_path"/.installed_* | cut -d_ -f2 )
+      pe "CernVM snapshot in use: ${Cm}${cvm_snapshot}${Cz}."
     fi
 
   fi
