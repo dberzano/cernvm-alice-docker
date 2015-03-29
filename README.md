@@ -194,3 +194,38 @@ Idea:
 
 If it works, we will be able to run CernVM in a container by relying on the
 overlay mechanism provided by Docker.
+
+
+### Mounting the desired tag of CernVM
+
+Tags of CernVM can be read from [CernVM Online](https://cernvm-online.cern.ch):
+it embeds some Python bindings that return the full list of remotely available.
+
+If we want to pick a certain tag, we have to pick:
+
+* a **branch**, *i.e.* the CernVM-FS repository where the software will be
+  downlaoded from,
+* a **tag**, *i.e.* the snapshot number
+
+For CernVM Production, the repository is `cernvm-prod.cern.ch`. The tag is
+chosen by editing the file `/etc/cvmfs/config.d/cernvm-prod.cern.ch.local`:
+
+```bash
+CVMFS_CLAIM_OWNERSHIP=no
+CVMFS_REPOSITORY_TAG=...
+```
+
+Note that `CVMFS_CLAIM_OWNERSHIP` has nothing to do with the tag. It is used to
+retain user and group IDs from the remote instead of overriding them.
+
+The second value, `CVMFS_REPOSITORY_TAG`, picks the latest tag if left empty or
+unset.
+
+
+#### Problems with multiple tags
+
+It seems it is currently impossible to have different tags from the same
+repository mounted at the same time.
+
+
+
