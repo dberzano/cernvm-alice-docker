@@ -20,8 +20,10 @@ exec_prefix="$( cd "$exec_prefix" ; pwd )"
 dry=0
 
 # General-purpose variables
-cvm_docker_build_dir="${exec_prefix}/docker-build/"
+cvm_root='/cvmfs/cernvm-prod.cern.ch/cvm3'
+cvm_docker_build_dir="${exec_prefix}/docker-build"
 docker_prefix='/var/lib/docker'
+cvm_placeholder='THIS_IS_A_CERNVM_MOUNT_POINT'
 
 # Echo
 function pe() (
@@ -36,20 +38,24 @@ function pen() (
 # Wrap a command, prints it on screen before executing it. Execute it for real
 # only if dry=0. Preserve its exit state.
 #
-# Usage: wrap <msg> <cmd> [param1 [param2 [param3...]]]
+# Usage: wrap [opts] <msg> <cmd> [param1 [param2 [param3...]]]
 function wrap() {
   local r
   local err=$(mktemp)
   local out
   local msg
   local preserve_out=0
+  local non_fatal=0
 
-  if [[ $1 == --out ]] ; then
-    preserve_out=1
-    shift
-  else
-    out=$(mktemp)
-  fi
+  while [[ $# -gt 0 ]] ; do
+    case "$1" in
+      --out) preserve_out=1 ; shift ;;
+      --non-fatal) non_fatal=1 ; shift ;;
+      *) break ;;
+    esac
+  done
+
+  [[ $preserve_out == 0 ]] && out=$(mktemp)
 
   msg="$1"
   shift
@@ -74,6 +80,9 @@ function wrap() {
     pe "\r[${Cy}FAKE${Cz}]"
   elif [[ $r == 0 ]] ; then
     pe "\r[ ${Cg}OK${Cz} ]"
+  elif [[ $non_fatal == 1 ]] ; then
+    # Erred, but it was non-fatal
+    pe "\r[${Cy}SKIP${Cz}]"
   else
     pe "\r[${Cr}FAIL${Cz}]"
 
@@ -120,7 +129,7 @@ function get_image_id() (
 
 # Register a dummy Docker CernVM image, to be used later as a disposable one.
 # $1: repository[:tag], in Docker's format
-function register() (
+function dcvm_register() (
   local tag="$1"
   local image_id
   local r
@@ -128,12 +137,79 @@ function register() (
     docker build --tag "$tag" "$cvm_docker_build_dir"
   r=$?
   if [[ $r == 0 ]] ; then
-    image_id=$( wrap --out "Fetching Image ID for \"$tag\"" get_image_id "$tag" )
+    image_id=$( wrap --out "Fetching Image ID for \"${tag}\"" get_image_id "${tag}" )
     r=$?
     if [[ $r == 0 ]] ; then
       pe "Image ${Cc}${tag}${Cz} registered as ${Cg}${image_id}${Cz}"
     fi
   fi
+  return $r
+)
+
+# Mount the CernVM mount point on top of the Docker layer adding the dummy file.
+# $1: repository[:tag], in Docker's format
+function dcvm_mount() (
+  local tag="$1"
+  local image_id
+  local layers
+  local layer_path
+  local found
+  local already_mounted
+  local r
+
+  image_id=$( wrap --out "Fetching Image ID for \"${tag}\"" get_image_id "${tag}" )
+  [[ $? == 0 ]] || return 1
+
+  # Fetch the list of layers
+  layers=$( wrap --out "Fetching layers for ${image_id}" cat ${docker_prefix}/aufs/layers/${image_id} )
+  [[ $? == 0 ]] || return 1
+
+  # Append our current image to the list of layers to inspect
+  layers="${layers} ${image_id}"
+
+  found=0
+  already_mounted=0
+  for layer_id in $layers ; do
+
+    layer_path="${docker_prefix}/aufs/diff/${layer_id}"
+
+    if cat /proc/mounts 2> /dev/null | grep -q "$layer_path" ; then
+      # This layer is already mounted
+      found=1
+      already_mounted=1
+      break
+    elif [[ -e "${layer_path}/${cvm_placeholder}" ]] ; then
+      # Not yet mounted
+      found=1
+      already_mounted=0
+      break
+    fi
+  done
+
+  if [[ $found == 0 ]] ; then
+    pe "Cannot find a suitable layer to overlay with CernVM for ${Cr}${tag}${Cz}"
+    r=1
+  else
+    # Mount operations here
+
+    if [[ $already_mounted == 1 ]] ; then
+      wrap --non-fatal "Layer ${layer_id} already mounted: trying to unmount first" \umount "$layer_path"
+      [[ $? == 0 ]] && already_mounted=0
+    fi
+
+    if [[ $already_mounted == 0 ]] ; then
+      wrap "Mounting CernVM root fs over ${layer_id}" \mount --bind "$cvm_root" "$layer_path"
+      r=$?
+      if [[ $r == 0 ]] ; then
+        pe "Freshly mounted over layer ${Cg}${layer_id}${Cz}."
+      fi
+    else
+      pe "Reusing existing mountpoint over layer ${Cy}${layer_id}${Cz}."
+      r=0
+    fi
+
+  fi
+
   return $r
 )
 
@@ -157,17 +233,14 @@ function main() (
   done
 
   action="$1"
-  if [[ $action == register || $action == run ]] ; then
+  if [[ $action == register || $action == run || $action == mount ]] ; then
     if [[ $tag == '' ]] ; then
       pe "Argument ${Cr}--tag${Cz} is mandatory."
       r=1
     else
-      $action "$tag"
+      dcvm_$action "$tag"
       r=$?
     fi
-  elif [[ $action == mount ]] ; then
-    mount
-    r=$?
   else
     pe "Action unknown or unspecified: \"${Cr}${action}${Cz}\"."
     pe "Usage: ${Cm}${prog}${Cz} [${Cc}--tag ${Cm}<tagname>${Cz}] [${Cc}register${Cz}|${Cc}run${Cz}|${Cc}mount${Cz}]"
