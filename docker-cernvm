@@ -284,12 +284,17 @@ function main() (
 
   local action
   local tag
+  local opts
   local r
 
   while [[ $# -gt 0 ]] ; do
     case "${1}" in
       --tag)
         tag="$2"
+        shift 2
+      ;;
+      --opts)
+        opts="$2"
         shift 2
       ;;
       *)
@@ -299,13 +304,20 @@ function main() (
   done
 
   action="$1"
+  shift
+
   if [[ $action == register || $action == run || $action == mount ]] ; then
     if [[ $tag == '' ]] ; then
       pe "Argument ${Cr}--tag${Cz} is mandatory."
       r=1
     else
-      dcvm_$action "$tag"
-      r=$?
+      if [[ $action == run ]] ; then
+        dcvm_run "$tag" "$opts" "$@"
+        r=$?
+      else
+        dcvm_$action "$tag"
+        r=$?
+      fi
     fi
   else
     pe "Action unknown or unspecified: \"${Cr}${action}${Cz}\"."
@@ -314,6 +326,17 @@ function main() (
   fi
 
   return $r
+)
+
+# Run the given image. All must be mounted first, otherwise it won't work.
+# $1: repository[:tag], in Docker's format
+# $2: options to Docker run (no spaces allowed)
+# $@: options to "docker run"
+function dcvm_run() (
+  local repotag="$1"
+  local dockeropts="$2"
+  shift 2
+  exec docker run --rm $dockeropts "$repotag" "$@"
 )
 
 # Entry point
