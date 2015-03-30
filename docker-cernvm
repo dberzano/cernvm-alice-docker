@@ -149,6 +149,43 @@ function dcvm_register() (
   return $r
 )
 
+# Attempt to unmount all bind mounts to CernVM, and the main repository. No args
+# are accepted.
+function dcvm_unmount_all() (
+
+  local err=0
+
+  # Go through all the bind mounts
+  exec 3< <( grep "^${cvm_root} " /etc/mtab | awk '{ print $2 }' )
+  while read -u 3 bind_mount ; do
+    wrap "Unmounting bind mount ${bind_mount}" umount "$bind_mount"
+    if [[ $? != 0 ]] ; then
+      err=1
+      break
+    fi
+  done
+
+  # If no error occurred, unmount the main mount point
+  if [[ $err == 0 ]] ; then
+
+    err=0
+
+    if grep -qE "^cvmfs2 ${cvm_main_mntpoint} " /etc/mtab ; then
+      wrap "Unmounting main branch ${cvm_branch}" umount "$cvm_main_mntpoint"
+      err=$?
+    fi
+
+    if [[ $err == 0 ]] ; then
+      pe "${Cg}Everything unmounted.${Cz}"
+      return 0
+    fi
+
+  fi
+
+  return 1
+)
+
+
 # Mount the CernVM mount point on top of the Docker layer adding the dummy file.
 # $1: repository[:tag], in Docker's format
 function dcvm_mount() (
@@ -318,6 +355,9 @@ function main() (
         r=$?
       fi
     fi
+  elif [[ $action == unmount-all ]] ; then
+    dcvm_unmount_all
+    r=$?
   else
     pe "Action unknown or unspecified: \"${Cr}${action}${Cz}\"."
     pe "Usage: ${Cm}${prog}${Cz} [${Cc}--tag ${Cm}<tagname>${Cz}] [${Cc}register${Cz}|${Cc}run${Cz}|${Cc}mount${Cz}]"
