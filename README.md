@@ -225,7 +225,18 @@ unset.
 #### Problems with multiple tags
 
 It seems it is currently impossible to have different tags from the same
-repository mounted at the same time.
+repository mounted at the same time:
 
+* the configuration file is unique per repository,
+* it is impossible to pass the tag as a command-line option
 
+If we want to upgrade the CernVM Docker Image while having CernVM snapshots
+running, we are forced to wait for all the containers to terminate, then unmount
+and remount the production repository.
 
+A solution must be found to this. Requests:
+
+* Give an option to pick the tag from the command-line: that would be very
+  convenient.
+* Give the possibility to mount the same repository multiple times, with
+  different options.
