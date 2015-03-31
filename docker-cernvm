@@ -342,40 +342,24 @@ function main() (
   action="$1"
   shift
 
-  if [[ $action == register || $action == run || $action == mount ]] ; then
+  if [[ $action == register || $action == mount ]] ; then
     if [[ $tag == '' ]] ; then
       pe "Argument ${Cr}--tag${Cz} is mandatory."
       r=1
     else
-      if [[ $action == run ]] ; then
-        dcvm_run "$tag" "$opts" "$@"
-        r=$?
-      else
-        dcvm_$action "$tag"
-        r=$?
-      fi
+      dcvm_$action "$tag"
+      r=$?
     fi
   elif [[ $action == unmount-all ]] ; then
     dcvm_unmount_all
     r=$?
   else
     pe "Action unknown or unspecified: \"${Cr}${action}${Cz}\"."
-    pe "Usage: ${Cm}${prog}${Cz} [${Cc}--tag ${Cm}<tagname>${Cz}] [${Cc}register${Cz}|${Cc}run${Cz}|${Cc}mount${Cz}]"
+    pe "Usage: ${Cm}${prog}${Cz} [${Cc}--tag ${Cm}<tagname>${Cz}] [${Cc}register${Cz}|${Cc}unmount-all${Cz}|${Cc}mount${Cz}]"
     r=1
   fi
 
   return $r
-)
-
-# Run the given image. All must be mounted first, otherwise it won't work.
-# $1: repository[:tag], in Docker's format
-# $2: options to Docker run (no spaces allowed)
-# $@: options to "docker run"
-function dcvm_run() (
-  local repotag="$1"
-  local dockeropts="$2"
-  shift 2
-  exec docker run --rm $dockeropts "$repotag" "$@"
 )
 
 # Entry point
