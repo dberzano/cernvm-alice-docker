@@ -1,0 +1,366 @@
+#!/bin/bash
+
+# docker-cernvm -- by Dario Berzano <dario.berzano@cern.ch>
+#
+# Using Docker overlay with the CernVM operating system
+
+# Color definitions
+export Cc="\033[36m"
+export Cm="\033[35m"
+export Cy="\033[33m"
+export Cb="\033[34m"
+export Cr="\033[31m"
+export Cg="\033[32m"
+export Cz="\033[m"
+
+# Automatic variables (do not edit)
+prog="$( basename "$0" )"
+exec_prefix="$( dirname "$0" )"
+exec_prefix="$( cd "$exec_prefix" ; pwd )"
+dry=0
+
+# General-purpose variables
+cvm_branch='cernvm-prod.cern.ch'
+cvm_main_mntpoint="/mnt/static_cernvm_${cvm_branch}"
+cvm_root="${cvm_main_mntpoint}/cvm3"
+cvm_mntopt='allow_other,grab_mountpoint'
+cvm_docker_build_dir="${exec_prefix}/docker-build"
+docker_prefix='/var/lib/docker'
+cvm_placeholder='THIS_IS_A_CERNVM_MOUNT_POINT'
+
+# Echo
+function pe() (
+  echo -e "$@" >&2
+)
+
+# Echo without newline
+function pen() (
+  echo -e -n "$@" >&2
+)
+
+# Wrap a command, prints it on screen before executing it. Execute it for real
+# only if dry=0. Preserve its exit state.
+#
+# Usage: wrap [opts] <msg> <cmd> [param1 [param2 [param3...]]]
+function wrap() {
+  local r
+  local err=$(mktemp)
+  local out
+  local msg
+  local preserve_out=0
+  local non_fatal=0
+
+  while [[ $# -gt 0 ]] ; do
+    case "$1" in
+      --out) preserve_out=1 ; shift ;;
+      --non-fatal) non_fatal=1 ; shift ;;
+      *) break ;;
+    esac
+  done
+
+  [[ $preserve_out == 0 ]] && out=$(mktemp)
+
+  msg="$1"
+  shift
+
+  pen "[....] ${Cc}${msg}${Cz}"
+
+  # Dry run?
+  if [[ $dry == 0 ]] ; then
+    if [[ $preserve_out == 1 ]] ; then
+      # Keep output on stdout
+      "$@" 2> "$err"
+      r=$?
+    else
+      "$@" > "$out" 2> "$err"
+      r=$?
+    fi
+  else
+    r=0
+  fi
+
+  if [[ $dry == 1 ]] ; then
+    pe "\r[${Cy}FAKE${Cz}]"
+  elif [[ $r == 0 ]] ; then
+    pe "\r[ ${Cg}OK${Cz} ]"
+  elif [[ $non_fatal == 1 ]] ; then
+    # Erred, but it was non-fatal
+    pe "\r[${Cy}SKIP${Cz}]"
+  else
+    pe "\r[${Cr}FAIL${Cz}]"
+
+    pe "\n${Cy}=== COMMAND FAILED === ${Cz}"
+    pe "${Cm}Command: ${Cr}${@}${Cz}"
+    pe "${Cm}Exit code: ${Cr}${r}${Cz}"
+
+    if [[ $out != '' && -s $out ]] ; then
+      pe "\n${Cy}=== STDOUT === ${Cz}"
+      cat "$out" >&2
+    fi
+
+    if [[ -s $err ]] ; then
+      pe "\n${Cy}=== STDERR === ${Cz}"
+      cat "$err" >&2
+    fi
+
+    pe ''
+  fi
+
+  rm -f "$err"
+  [[ $out != '' ]] && rm -f "$out"
+
+  return $r
+}
+
+# Gets the image id.
+function get_image_id() (
+  local repotag="$1"
+  local tag=$( echo "$repotag" | cut -d: -f2 )
+  local repo=$( echo "$repotag" | cut -d: -f1 )
+  local image_id
+  if [[ $tag == '' ]] ; then
+    repotag="${repo}:latest"
+  fi
+  image_id=$( docker images -q --no-trunc "$repotag" )
+  r=$?
+  if [[ $image_id == '' || $r != 0 ]] ; then
+    return 1
+  fi
+  echo "$image_id"
+  return 0
+)
+
+# Register a dummy Docker CernVM image, to be used later as a disposable one.
+# $1: repository[:tag], in Docker's format
+function dcvm_register() (
+  local tag="$1"
+  local image_id
+  local r
+  wrap "Registering CernVM dummy image to Docker as \"$tag\"" \
+    docker build --tag "$tag" "$cvm_docker_build_dir"
+  r=$?
+  if [[ $r == 0 ]] ; then
+    image_id=$( wrap --out "Fetching Image ID for \"${tag}\"" get_image_id "${tag}" )
+    r=$?
+    if [[ $r == 0 ]] ; then
+      pe "Image ${Cc}${tag}${Cz} registered as ${Cg}${image_id}${Cz}"
+    fi
+  fi
+  return $r
+)
+
+# Attempt to unmount all bind mounts to CernVM, and the main repository. No args
+# are accepted.
+function dcvm_unmount_all() (
+
+  local err=0
+
+  # Go through all the bind mounts
+  exec 3< <( grep "^${cvm_root} " /etc/mtab | awk '{ print $2 }' )
+  while read -u 3 bind_mount ; do
+    wrap "Unmounting bind mount ${bind_mount}" umount "$bind_mount"
+    if [[ $? != 0 ]] ; then
+      err=1
+      break
+    fi
+  done
+
+  # If no error occurred, unmount the main mount point
+  if [[ $err == 0 ]] ; then
+
+    err=0
+
+    if grep -qE "^cvmfs2 ${cvm_main_mntpoint} " /etc/mtab ; then
+      wrap "Unmounting main branch ${cvm_branch}" umount "$cvm_main_mntpoint"
+      err=$?
+    fi
+
+    if [[ $err == 0 ]] ; then
+      pe "${Cg}Everything unmounted.${Cz}"
+      return 0
+    fi
+
+  fi
+
+  return 1
+)
+
+
+# Mount the CernVM mount point on top of the Docker layer adding the dummy file.
+# $1: repository[:tag], in Docker's format
+function dcvm_mount() (
+  local tag="$1"
+  local image_id
+  local layers
+  local layer_path
+  local found
+  local already_mounted
+  local r
+
+  image_id=$( wrap --out "Fetching Image ID for \"${tag}\"" get_image_id "${tag}" )
+  [[ $? == 0 ]] || return 1
+
+  # Fetch the list of layers
+  layers=$( wrap --out "Fetching layers for ${image_id}" cat ${docker_prefix}/aufs/layers/${image_id} )
+  [[ $? == 0 ]] || return 1
+
+  # Append our current image to the list of layers to inspect
+  layers="${layers} ${image_id}"
+
+  found=0
+  already_mounted=0
+  for layer_id in $layers ; do
+
+    layer_path="${docker_prefix}/aufs/diff/${layer_id}"
+
+    if cat /etc/mtab 2> /dev/null | grep -qE "^${cvm_root} ${layer_path} " ; then
+      # This layer is already bind-mounted
+      found=1
+      already_mounted=1
+      break
+    elif [[ -e "${layer_path}/${cvm_placeholder}" ]] ; then
+      # Not yet mounted
+      found=1
+      already_mounted=0
+      break
+    fi
+  done
+
+  if [[ $found == 0 ]] ; then
+    pe "Cannot find a suitable layer to overlay with CernVM for ${Cr}${tag}${Cz}"
+    r=1
+  else
+
+
+    if [[ $already_mounted == 1 ]] ; then
+
+      #pe "already bind-mounted: try to unmount it first (errors are non-fatal)"
+
+      wrap --non-fatal \
+        "Found layer ${layer_id} already mounted: trying to unmount first" \
+        umount "$layer_path"
+      if [[ $? == 0 ]] ; then
+        # We have unmounted it successfully
+        already_mounted=0
+      fi
+
+    fi
+
+    # See again if now it is already mounted. If not, try to mount it. In this case, errors are
+    # considered fatal
+    if [[ $already_mounted == 0 ]] ; then
+
+      ### cvm ###
+
+      # Check if the main mountpoint is mounted
+      cvm_main_is_mounted=0
+      grep -qE "^cvmfs2 ${cvm_main_mntpoint} " /etc/mtab
+      [[ $? == 0 ]] && cvm_main_is_mounted=1
+
+      # Check how many bind mounts we have
+      cvm_num_bind_mounts=$( cat /etc/mtab | grep -c "^${cvm_root} " )
+      r=0
+
+      if [[ $cvm_num_bind_mounts == 0 && $cvm_main_is_mounted == 1 ]] ; then
+        wrap \
+          "Unmounting main CernVM branch ${cvm_branch}" \
+          umount "$cvm_main_mntpoint"
+        r=$?
+      fi
+
+      if [[ $cvm_main_is_mounted == 0 || $r == 0 ]] ; then
+        # Execute only if it was not mounted, or if the prev. command was successful
+        wrap \
+          "Mounting main CernVM branch ${cvm_branch}" \
+          mount -t cvmfs -o "$cvm_mntopt" "$cvm_branch" "$cvm_main_mntpoint"
+        r=$?
+      fi
+
+      ### /cvm ###
+
+      if [[ $r == 0 ]] ; then
+
+        wrap \
+          "Bind-mounting CernVM branch ${cvm_branch} over ${layer_id}" \
+          mount --bind "$cvm_root" "$layer_path"
+        r=$?
+
+        if [[ $r == 0 ]] ; then
+          pe "Layer ${Cg}${layer_id}${Cz} freshly mounted."
+        else
+          pe "${Cr}Error:${Cz} cannot bind mount over ${Cr}${layer_id}${Cz}!"
+        fi
+
+      else
+
+          pe "${Cr}Error:${Cz} cannot umount/remount CernVM branch ${Cr}${cvm_branch}${Cz}!"
+
+      fi
+
+    else
+
+      pe "Reusing existing layer mount ${Cy}${layer_id}${Cz}."
+      r=0
+
+    fi
+
+    if [[ $r == 0 ]] ; then
+      # Info about CernVM snapshot in use
+      cvm_snapshot=$( basename "$layer_path"/.installed_* | cut -d_ -f2 )
+      pe "CernVM snapshot in use: ${Cm}${cvm_snapshot}${Cz}."
+    fi
+
+  fi
+
+  return $r
+)
+
+# The main function
+function main() (
+
+  local action
+  local tag
+  local opts
+  local r
+
+  while [[ $# -gt 0 ]] ; do
+    case "${1}" in
+      --tag)
+        tag="$2"
+        shift 2
+      ;;
+      --opts)
+        opts="$2"
+        shift 2
+      ;;
+      *)
+        break
+      ;;
+    esac
+  done
+
+  action="$1"
+  shift
+
+  if [[ $action == register || $action == mount ]] ; then
+    if [[ $tag == '' ]] ; then
+      pe "Argument ${Cr}--tag${Cz} is mandatory."
+      r=1
+    else
+      dcvm_$action "$tag"
+      r=$?
+    fi
+  elif [[ $action == unmount-all ]] ; then
+    dcvm_unmount_all
+    r=$?
+  else
+    pe "Action unknown or unspecified: \"${Cr}${action}${Cz}\"."
+    pe "Usage: ${Cm}${prog}${Cz} [${Cc}--tag ${Cm}<tagname>${Cz}] [${Cc}register${Cz}|${Cc}unmount-all${Cz}|${Cc}mount${Cz}]"
+    r=1
+  fi
+
+  return $r
+)
+
+# Entry point
+main "$@" || exit $?
