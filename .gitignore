@@ -1,3 +1,4 @@
 /condor-secret
 /condor-configure.ok
 /proc-cpuinfo-1cpu
+/condor_submit/output-*
