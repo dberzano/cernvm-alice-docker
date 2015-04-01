@@ -1,11 +1,30 @@
-Experimenting with Docker in CernVM and ALICE
-=============================================
+CernVM and Condor in a Docker container
+=======================================
 
-Scripts, utilities and documentation on using CernVM 3 from CVMFS in a Docker
-container.
+Ideas behind this project:
+
+* running CernVM from CVMFS as a Docker container
+* running one-job, one-core Condor (the "HT" is mute) Docker containers as
+  execute nodes
 
 
-## Building the CernVM image
+## Running CernVM inside a Docker container
+
+Pending.
+
+
+## Condor inside Docker
+
+Pending.
+
+
+## Notes and discussion
+
+This section is about general notes and discussions behind this project. Please
+take it as it is :-)
+
+
+### Building the CernVM image
 
 The CernVM image depends only from **scratch**. To build it, go to the build
 directory and run the build command:
@@ -47,7 +66,7 @@ dberzano/cernvm         latest              a81ca84cd833        7 minutes ago   
 ```
 
 
-## Cleaning up images
+### Cleaning up images
 
 To clean up all the images not belonging to any repository:
 
@@ -58,7 +77,7 @@ docker images --no-trunc | grep '^<none>' | awk '{ print $3 }' | xargs -L 1 dock
 **Note:** please think twice before running the command!
 
 
-## Where are my layers?
+### Where are my layers?
 
 Start from listing the images:
 
