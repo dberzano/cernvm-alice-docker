@@ -1,0 +1,5 @@
+Executable     = testjob.sh
+Universe       = vanilla
+Output         = output-out
+Log            = output-log
+Queue
