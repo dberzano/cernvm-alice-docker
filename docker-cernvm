@@ -38,6 +38,27 @@ function pen() (
   echo -e -n "$@" >&2
 )
 
+# Successful echo. Echo 'ok' in green, or whatever you want if provided
+function pok() (
+  local msg="$1"
+  [[ $msg == '' ]] && msg='ok'
+  pe "${Cg}${msg}${Cz}"
+)
+
+# Error echo. Echo 'error' in red, or whatever you want if provided
+function perr() (
+  local msg="$1"
+  [[ $msg == '' ]] && msg='error'
+  pe "${Cr}${msg}${Cz}"
+)
+
+# Warning echo. Echo 'warning' in yellow, or whatever you want if provided
+function pwarn() (
+  local msg="$1"
+  [[ $msg == '' ]] && msg='error'
+  pe "${Cy}${msg}${Cz}"
+)
+
 # Wrap a command, prints it on screen before executing it. Execute it for real
 # only if dry=0. Preserve its exit state.
 #
@@ -49,11 +70,13 @@ function wrap() {
   local msg
   local preserve_out=0
   local non_fatal=0
+  local custom_ok=0
 
   while [[ $# -gt 0 ]] ; do
     case "$1" in
       --out) preserve_out=1 ; shift ;;
       --non-fatal) non_fatal=1 ; shift ;;
+      --custom-ok) custom_ok=1 ; shift ;;
       *) break ;;
     esac
   done
@@ -63,7 +86,7 @@ function wrap() {
   msg="$1"
   shift
 
-  pen "[....] ${Cc}${msg}${Cz}"
+  pen "${msg}..."
 
   # Dry run?
   if [[ $dry == 0 ]] ; then
@@ -80,26 +103,27 @@ function wrap() {
   fi
 
   if [[ $dry == 1 ]] ; then
-    pe "\r[${Cy}FAKE${Cz}]"
+    pwarn 'dry run'
   elif [[ $r == 0 ]] ; then
-    pe "\r[ ${Cg}OK${Cz} ]"
+    [[ $custom_ok == 0 ]] && pok
   elif [[ $non_fatal == 1 ]] ; then
     # Erred, but it was non-fatal
-    pe "\r[${Cy}SKIP${Cz}]"
+    pwarn 'non-fatal'
   else
-    pe "\r[${Cr}FAIL${Cz}]"
+    perr
 
-    pe "\n${Cy}=== COMMAND FAILED === ${Cz}"
-    pe "${Cm}Command: ${Cr}${@}${Cz}"
-    pe "${Cm}Exit code: ${Cr}${r}${Cz}"
+    pe "\n${Cy}>>> command failed <<<${Cz}"
+    pe "${Cc}Description: ${Cz}${msg}${Cz}"
+    pe "${Cc}Command: ${Cz}${@}${Cz}"
+    pe "${Cc}Exit code: ${Cz}${r}${Cz}"
 
     if [[ $out != '' && -s $out ]] ; then
-      pe "\n${Cy}=== STDOUT === ${Cz}"
+      pe "\n${Cy}>>> stdout <<<${Cz}"
       cat "$out" >&2
     fi
 
     if [[ -s $err ]] ; then
-      pe "\n${Cy}=== STDERR === ${Cz}"
+      pe "\n${Cy}>>> stderr <<<${Cz}"
       cat "$err" >&2
     fi
 
@@ -133,17 +157,20 @@ function get_image_id() (
 # Register a dummy Docker CernVM image, to be used later as a disposable one.
 # $1: repository[:tag], in Docker's format
 function dcvm_register() (
+
   local tag="$1"
   local image_id
   local r
-  wrap "Registering CernVM dummy image to Docker as \"$tag\"" \
+
+  wrap "Registering CernVM dummy image to Docker as \"${tag}\"" \
     docker build --tag "$tag" "$cvm_docker_build_dir"
   r=$?
+
   if [[ $r == 0 ]] ; then
-    image_id=$( wrap --out "Fetching Image ID for \"${tag}\"" get_image_id "${tag}" )
+    image_id=$( wrap --out --custom-ok "Fetching Image ID for \"${tag}\"" get_image_id "${tag}" )
     r=$?
     if [[ $r == 0 ]] ; then
-      pe "Image ${Cc}${tag}${Cz} registered as ${Cg}${image_id}${Cz}"
+      pok "${image_id}"
     fi
   fi
   return $r
