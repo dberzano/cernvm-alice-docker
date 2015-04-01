@@ -212,7 +212,6 @@ function dcvm_unmount_all() (
   return 1
 )
 
-
 # Mount the CernVM mount point on top of the Docker layer adding the dummy file.
 # $1: repository[:tag], in Docker's format
 function dcvm_mount() (
@@ -382,7 +381,7 @@ function main() (
     r=$?
   else
     pe "Action unknown or unspecified: \"${Cr}${action}${Cz}\"."
-    pe "Usage: ${Cm}${prog}${Cz} [${Cc}--tag ${Cm}<tagname>${Cz}] [${Cc}register${Cz}|${Cc}unmount-all${Cz}|${Cc}mount${Cz}]"
+    pe "Usage: ${Cm}${prog}${Cz} [${Cc}--tag ${Cm}<tagname>${Cz}] [${Cc}--dry-run${Cz}] [${Cm}register${Cz}|${Cm}unmount-all${Cz}|${Cm}mount${Cz}]"
     r=1
   fi
 
