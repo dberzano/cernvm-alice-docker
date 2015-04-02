@@ -286,6 +286,9 @@ function dcvm_mount() (
           "Unmounting main CernVM branch ${cvm_branch}" \
           umount "$cvm_main_mntpoint"
         r=$?
+        if [[ $r == 0 ]] ; then
+          wrap "Waiting for the unmount to be effective" sleep 3
+        fi
       fi
 
       if [[ $cvm_main_is_mounted == 0 || $r == 0 ]] ; then
@@ -310,9 +313,7 @@ function dcvm_mount() (
         fi
 
       else
-
-          pe "${Cr}Error:${Cz} cannot umount/remount CernVM branch ${Cr}${cvm_branch}${Cz}!"
-
+        pe "${Cr}Error:${Cz} cannot umount/remount CernVM branch ${Cr}${cvm_branch}${Cz}!"
       fi
 
     else
