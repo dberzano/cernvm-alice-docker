@@ -118,7 +118,43 @@ one to use at the **mount** stage.
 
 ### Mounting the root filesystem from CVMFS over the Docker image
 
-Pending.
+This operation requires root privileges. Do:
+
+```
+sudo ./docker-cernvm --tag dberzano/cernvm --branch cernvm-devel.cern.ch mount
+```
+
+The `--branch` switch is optional: if not specified, `cernvm-prod.cern.ch` will
+be used.
+
+The `--tag` switch is mandatory: it specifies the repository (and, optionally,
+the tag) to use. It uses the standard Docker format:
+
+```
+username/repository:tag
+```
+
+The `tag` part is optional and is mapped to `latest` if not specified.
+
+Sample output:
+
+```
+Fetching Image ID for "dberzano/cernvm"...671f3f53b3
+Getting layers for 671f3f53b3...ok
+Creating mountpoint /mnt/static_cernvm_cernvm-devel.cern.ch...ok
+Mounting main CernVM branch cernvm-devel.cern.ch...ok
+Bind-mounting CernVM branch cernvm-devel.cern.ch over 6f7834ff04...ok
+Layer 6f7834ff04 freshly mounted.
+CernVM snapshot in use: cernvm-system-3.3.58.0
+All operations executed successfully
+```
+
+Note that the mount operation automatically unmounts and remounts the CernVM
+repository, if possible (*i.e.* if no Docker images using it are running).
+
+> This opens the possibility, for instance, to automatically update to the
+> latest CernVM snapshot, since for the moment it is unfortunately not possible
+> to mount the same CernVM-FS repo multiple times with different snapshots.
 
 
 ## Condor inside Docker
