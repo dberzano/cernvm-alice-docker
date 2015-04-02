@@ -1,9 +1,0 @@
-#!/bin/bash
-
-dest_log='/tmp/condor-hook-job-exit.log'
-
-export LANG=C
-
-echo "[$(date --utc)] I have been invoked!" >> "$dest_log"
-env >> "$dest_log"
-echo ""
