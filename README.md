@@ -120,7 +120,7 @@ one to use at the **mount** stage.
 
 This operation requires root privileges. Do:
 
-```
+```bash
 sudo ./docker-cernvm --tag dberzano/cernvm --branch cernvm-devel.cern.ch mount
 ```
 
@@ -155,6 +155,36 @@ repository, if possible (*i.e.* if no Docker images using it are running).
 > This opens the possibility, for instance, to automatically update to the
 > latest CernVM snapshot, since for the moment it is unfortunately not possible
 > to mount the same CernVM-FS repo multiple times with different snapshots.
+
+
+### Unmounting all images and main repos
+
+Main repository is an actual CernVM-FS mountpoint, while Docker image mounts are
+bind mounts of the main repository.
+
+If for some reason there are stale mountpoints, you can unmount all the bind
+mounts, and the main repository, with a single command:
+
+```bash
+sudo ./docker-cernvm --branch cernvm-devel.cern.ch unmount-all
+```
+
+Note that `umount-all` is a synonim for `unmount-all`, and `--branch` is
+optional, defaulting to `cernvm-prod.cern.ch` if not specified.
+
+The command will fail if it is not possible to unmount something for some
+reason, *i.e.* if there are Docker containers currently using it.
+
+Sample output:
+
+```
+Unmounting bind mount /var/lib/docker/aufs/diff/6f7834ff04d7cfaf93832e09790346c6d741968ec202fdf3aec881374d3faffa...ok
+Unmounting main branch cernvm-devel.cern.ch...ok
+Everything unmounted.
+All operations executed successfully
+```
+
+This is a privileged operation like **mount**.
 
 
 ## Condor inside Docker
