@@ -140,10 +140,11 @@ function dcvm_get_image_id() (
   local tag=$( echo "$repotag" | cut -d: -f2 )
   local repo=$( echo "$repotag" | cut -d: -f1 )
   local image_id
-  if [[ $tag == '' ]] ; then
-    repotag="${repo}:latest"
+  if [[ $tag == $repo ]] ; then
+    tag='latest'
   fi
-  image_id=$( docker images -q --no-trunc "$repotag" )
+  image_id=$( docker images --no-trunc "$repotag" | grep -E "^${repo}\s+${tag}\s+" | \
+    awk '{ print $3 }' )
   r=$?
   if [[ $image_id == '' || $r != 0 ]] ; then
     return 1
