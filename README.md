@@ -216,7 +216,21 @@ between all containers using the same CernVM-FS repositories.
 
 ## Condor inside Docker
 
-Pending.
+The `condor-condor-cvm-docker-pilot` program is the Condor pilot to be run
+inside the CernVM container. To do that, simply run:
+
+```bash
+docker-cernvm-run-pilot
+```
+
+The configuration is embedded in the Pilot (except the Condor secret). Edit it
+according to your local configuration.
+
+**Note:** pending documentation:
+
+* How to configure Condor on the head node
+* Run container in background and not interactively
+* Separate configuration from Pilot script
 
 
 ## Notes and discussion
