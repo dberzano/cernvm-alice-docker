@@ -88,9 +88,32 @@ ln -nfs cernvm-devel.cern.ch.local cernvm-testing.cern.ch.local
 It should be now possible to mount every experimental repository.
 
 
-### Registering the CernVM Docker image
+### Register the CernVM Docker image
 
-Pending.
+Registering the CernVM Docker image is as simple as this:
+
+```bash
+docker-cernvm --tag dberzano/cernvm register
+```
+
+This outputs:
+
+```
+Registering CernVM dummy image to Docker as "dberzano/cernvm"...ok
+Fetching Image ID for "dberzano/cernvm"...671f3f53b3
+All operations executed successfully
+```
+
+Check with `docker images`:
+
+```
+docker images
+REPOSITORY              TAG                 IMAGE ID            CREATED             VIRTUAL SIZE
+dberzano/cernvm         latest              671f3f53b3bb        56 seconds ago      0 B
+```
+
+Note that this is not tied to any specific CernVM version. We will decide which
+one to use at the **mount** stage.
 
 
 ### Mounting the root filesystem from CVMFS over the Docker image
