@@ -10,6 +10,91 @@ Ideas behind this project:
 
 ## Running CernVM inside a Docker container
 
+We provide the `docker-cernvm` utility that helps running a container with a
+proper CernVM environment: the CernVM image will be obtained by CVMFS and does
+not need to be entirely imported into Docker.
+
+CernVM, as a virtual machine, works with the principle of *overlays*: the base
+read-only filesystem is overlaid with a read-write copy. The CernVM virtual
+machine currently uses AUFS as overlay mechanism.
+
+Docker uses *layers* as well, superimposed using an overlay mechanism. In our
+configuration, AUFS is used, which is the same used by CernVM.
+
+This is a fortunate coincidence: we are going to "trick" Docker into thinking
+that a CVMFS-mounted root directory of CernVM is one of its base images, and it
+will perform automatically all the necessary overlays for us.
+
+
+### Preface: configuring CernVM-FS on the host machine
+
+CernVM-FS must be installed on your host machine. It is better if autofs is not
+configured: we are going to mount things manually.
+
+There is currently a single CernVM-FS repository for the "stable" CernVM:
+
+* cernvm-prod.cern.ch
+
+This is available from the various Stratum 1s preconfigured with the standard
+CernVM-FS installation (keys included). You need to download the public keys
+from [here](https://github.com/cernvm/cernvm-micro/tree/master/packages.d/cvmfs-config/etc/cvmfs/keys)
+for the additional "experimental" repositories:
+
+* cernvm-devel.cern.ch
+* cernvm-sl7.cern.ch
+* cernvm-slc4.cern.ch
+* cernvm-slc5.cern.ch
+* cernvm-testing.cern.ch
+
+all of them available directly from the Stratum 0 **hepvm.cern.ch**. Keys must
+be stored under `/etc/cvmfs/keys/cern.ch` of the machine hosting the containers.
+
+Updated list with mapping available [here](https://github.com/cernvm/cernvm-micro/blob/master/branch2server). To download all of them:
+
+```bash
+cd /etc/cvmfs/keys/cern.ch/
+for r in cernvm-devel.cern.ch cernvm-sl7.cern.ch cernvm-slc4.cern.ch cernvm-slc5.cern.ch cernvm-testing.cern.ch ; do
+  rm -f ${r}.pub
+  wget https://raw.githubusercontent.com/cernvm/cernvm-micro/master/packages.d/cvmfs-config/etc/cvmfs/keys/${r}/${r}.pub
+done
+```
+
+Concerning the repository configuration files, only cernvm-prod.cern.ch is
+preconfigured. To configure the others, create, for instance, the file:
+
+```
+/etc/cvmfs/config.d/cernvm-devel.cern.ch.local
+```
+
+with the following content:
+
+```bash
+CVMFS_SERVER_URL="http://hepvm.cern.ch/cvmfs/@fqrn@"
+CVMFS_CLAIM_OWNERSHIP=no
+#CVMFS_REPOSITORY_TAG=cernvm-system-3.3.0.5
+```
+
+Specifying the tag is optional: by default, the latest snapshot is selected.
+Just symlink it to the other experimental repos:
+
+```bash
+cd /etc/cvmfs/config.d/
+ln -nfs cernvm-devel.cern.ch.local cernvm-sl7.cern.ch.local
+ln -nfs cernvm-devel.cern.ch.local cernvm-slc4.cern.ch.local
+ln -nfs cernvm-devel.cern.ch.local cernvm-slc5.cern.ch.local
+ln -nfs cernvm-devel.cern.ch.local cernvm-testing.cern.ch.local
+```
+
+It should be now possible to mount every experimental repository.
+
+
+### Registering the CernVM Docker image
+
+Pending.
+
+
+### Mounting the root filesystem from CVMFS over the Docker image
+
 Pending.
 
 
