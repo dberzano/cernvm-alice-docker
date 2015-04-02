@@ -1,0 +1,60 @@
+#!/bin/bash
+
+# This program's location
+prog_dir="$( dirname "$0" )"
+prog_dir="$( cd "$prog_dir" ; pwd )"
+
+# Configuration files (use absolute paths)
+proc_cpuinfo_onecpu="${prog_dir}/.proc-cpuinfo-onecpu"
+pilot_template="${prog_dir}/condor-cvm-docker-pilot"
+pilot="${prog_dir}/.condor-cvm-docker-pilot.private"
+condor_secret_file="${prog_dir}/condor-secret"
+
+# Image name
+docker_image='dberzano/cernvm'
+
+# Count number of CPUs
+ncpus=$( cat /proc/cpuinfo | grep -c bogomips )
+
+# Number of shares assigned to the container corresponding to a single CPU (there are 1024 shares)
+ncpushares=$(( 1024 / $ncpus ))
+
+# Total memory, in bytes, on the host machine
+mem_bytes=$( free -b | head -n2 | tail -n1 | awk '{print $2}' )
+
+# Assign a fraction of this memory to the container
+mem_share_bytes=$(( $mem_bytes / $ncpus ))
+
+# Prepare a fake /proc/cpuinfo containing only the first CPU
+while read Line ; do
+  if [[ $Line == '' ]] ; then
+    break
+  else
+    echo "$Line"
+  fi
+done < <( cat /proc/cpuinfo ) > "${proc_cpuinfo_onecpu}"
+
+# Insert the secret password in the configuration file
+cat "${pilot_template}" | \
+  sed -e "s|@CONDOR_SECRET@|$(cat ${prog_dir}/condor-secret)|g" > "${pilot}"
+chmod +x "${pilot}"
+
+# Run the pilot, or a custom command
+if [[ "$*" == '' ]] ; then
+  args='/condor-cvm-docker-pilot'
+else
+  args=("$@")
+fi
+
+# Execute the container. For understanding the swap, have a look at:
+# https://github.com/docker/docker/blob/master/docs/sources/reference/run.md
+exec docker run -i -t \
+  -v /cvmfs/alice.cern.ch:/cvmfs/alice.cern.ch \
+  -v /cvmfs/alice-ocdb.cern.ch:/cvmfs/alice-ocdb.cern.ch \
+  -v ${pilot}:/condor-cvm-docker-pilot \
+  -v ${proc_cpuinfo_onecpu}:/proc/cpuinfo \
+  --cpu-shares=${ncpushares} \
+  --memory=${mem_share_bytes} \
+  --memory-swap=0 \
+  --rm \
+  "$docker_image" "$args"
