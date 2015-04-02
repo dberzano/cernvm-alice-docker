@@ -222,8 +222,12 @@ function dcvm_mount() (
   local already_mounted
   local r
 
-  image_id=$( wrap --out "Fetching Image ID for \"${tag}\"" dcvm_get_image_id "${tag}" )
-  [[ $? == 0 ]] || return 1
+  image_id=$( wrap --out --custom-ok "Fetching Image ID for \"${tag}\"" dcvm_get_image_id "${tag}" )
+  if [[ $? == 0 ]] ; then
+    pok "${image_id:0:10}"
+  else
+    return 1
+  fi
 
   # Fetch the list of layers
   layers=$(wrap --out "Getting layers for ${image_id:0:10}" \
