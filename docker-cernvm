@@ -435,7 +435,7 @@ function main() (
         r=$?
       fi
 
-      if [[ $? != 0 ]] ; then
+      if [[ $r != 0 ]] ; then
         perr 'Operations interrupted with errors'
         return $?
       fi
