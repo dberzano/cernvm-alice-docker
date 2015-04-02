@@ -293,6 +293,7 @@ function dcvm_mount() (
 
       if [[ $cvm_main_is_mounted == 0 || $r == 0 ]] ; then
         # Execute only if it was not mounted, or if the prev. command was successful
+        wrap "Creating mountpoint ${cvm_main_mntpoint}" mkdir -p "$cvm_main_mntpoint"
         wrap \
           "Mounting main CernVM branch ${cvm_branch}" \
           mount -t cvmfs -o "$cvm_mntopt" "$cvm_branch" "$cvm_main_mntpoint"
