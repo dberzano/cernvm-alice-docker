@@ -16,7 +16,7 @@ condor_secret="@CONDOR_SECRET@"
 condor_head='alidbz.cern.ch'
 
 # How many seconds to wait for the job to come
-pilot_sleep_s=10
+pilot_sleep_s=120
 
 # How many seconds between checking if master is still alive
 condor_master_ping_s=4
