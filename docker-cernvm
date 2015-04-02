@@ -22,7 +22,7 @@ dry=0
 # General-purpose variables
 cvm_branch='cernvm-prod.cern.ch'
 cvm_mntopt='allow_other,grab_mountpoint'
-cvm_docker_build_dir="${exec_prefix}/docker-build"
+cvm_docker_build_dir="${exec_prefix}/docker-cernvm-build"
 docker_prefix='/var/lib/docker'
 cvm_placeholder='THIS_IS_A_CERNVM_MOUNT_POINT'
 
