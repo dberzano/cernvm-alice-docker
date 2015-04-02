@@ -378,7 +378,7 @@ function main() (
       fi
     fi
 
-    if [[ $action == unmount-all || $action == mount ]] ; then
+    if [[ $action == umount-all || $action == unmount-all || $action == mount ]] ; then
       if [[ $(whoami) != root && $force_root == 0 ]] ; then
         pe "${Cr}${action}${Cz} is a root operation: cannot continue" \
           "(force with ${Cr}--force-root${Cz})"
@@ -388,7 +388,7 @@ function main() (
 
     case $action in
       register) do_register=1 ;;
-      unmount-all) do_unmount_all=1 ;;
+      umount-all|unmount-all) do_unmount_all=1 ;;
       mount) do_mount=1 ;;
       *)
         invalid_command=1
@@ -413,7 +413,7 @@ function main() (
       pe 'No action specified.'
     fi
     pe "Usage: ${Cm}${prog}${Cz} [${Cc}--tag ${Cm}<tagname>${Cz}] [${Cc}--dry-run${Cz}]" \
-      "[${Cc}--force-root${Cz}] [${Cm}register${Cz}|${Cm}unmount-all${Cz}|${Cm}mount${Cz}]"
+      "[${Cc}--force-root${Cz}] [${Cm}register${Cz}|${Cm}u(n)mount-all${Cz}|${Cm}mount${Cz}]"
     return 1
   else
 
@@ -422,7 +422,7 @@ function main() (
       if [[ $action == register || $action == mount ]] ; then
         dcvm_$action "$tag"
         r=$?
-      elif [[ $action == unmount-all ]] ; then
+      elif [[ $action == umount-all || $action == unmount-all ]] ; then
         dcvm_unmount_all
         r=$?
       fi
@@ -442,3 +442,4 @@ function main() (
 
 # Entry point
 main "$@" || exit $?
+                                                                          
