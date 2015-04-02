@@ -187,6 +187,33 @@ All operations executed successfully
 This is a privileged operation like **mount**.
 
 
+### Running the Docker CernVM container
+
+Just use the ordinary `docker run` command. For instance:
+
+```bash
+docker run -i -t --rm -v /cvmfs/alice.cern.ch:/cvmfs/alice.cern.ch dberzano/cernvm
+```
+
+Note that we are having full read/write permissions inside the container thanks
+to the Docker overlaying mechanism - and we don't even need to use it in
+"privileged mode" as the filesystem is managed *outside* the container.
+
+Please also note that `--rm` is used, meaning that the container will be
+**destroyed** on exit. The container contains only the differences with respect
+to the specific CernVM base we were using when we ran it, so, unless we are
+explicitly choosing a CernVM snapshot, the diff layer may not make any sense if
+used with different snapshots!
+
+In the example above we are also mounting the ALICE CernVM-FS repository, which
+is supposed to exist and be accessible from the hosting machine.
+
+In practice we are relying on the host's caching mechanisms for CernVM-FS, which
+is what makes this approach appealing: no internal cache inside the containers
+means no privileged mode needed, and *actual*, *shared* and *persistent* cache
+between all containers using the same CernVM-FS repositories.
+
+
 ## Condor inside Docker
 
 Pending.
