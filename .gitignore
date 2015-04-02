@@ -1,4 +1,4 @@
 /condor-secret
 /.condor-cvm-docker-pilot.private
 /.proc-cpuinfo-onecpu
-/condor_submit/output-*
+/condor-test-job/output-*
