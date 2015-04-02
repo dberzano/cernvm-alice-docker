@@ -21,8 +21,6 @@ dry=0
 
 # General-purpose variables
 cvm_branch='cernvm-prod.cern.ch'
-cvm_main_mntpoint="/mnt/static_cernvm_${cvm_branch}"
-cvm_root="${cvm_main_mntpoint}/cvm3"
 cvm_mntopt='allow_other,grab_mountpoint'
 cvm_docker_build_dir="${exec_prefix}/docker-build"
 docker_prefix='/var/lib/docker'
@@ -359,11 +357,19 @@ function main() (
         force_root=1
         shift
       ;;
+      --branch)
+        cvm_branch="$2"
+        shift 2
+      ;;
       *)
         break
       ;;
     esac
   done
+
+  # The following two variables depend on cvm_branch
+  cvm_main_mntpoint="/mnt/static_cernvm_${cvm_branch}"
+  cvm_root="${cvm_main_mntpoint}/cvm3"
 
   # Support multiple actions
   while [[ $# -gt 0 ]] ; do
@@ -413,7 +419,8 @@ function main() (
       pe 'No action specified.'
     fi
     pe "Usage: ${Cm}${prog}${Cz} [${Cc}--tag ${Cm}<tagname>${Cz}] [${Cc}--dry-run${Cz}]" \
-      "[${Cc}--force-root${Cz}] [${Cm}register${Cz}|${Cm}u(n)mount-all${Cz}|${Cm}mount${Cz}]"
+      "[${Cc}--force-root${Cz}] [${Cc}--branch${Cz}]" \
+      "[${Cm}register${Cz}|${Cm}u(n)mount-all${Cz}|${Cm}mount${Cz}]"
     return 1
   else
 
@@ -442,4 +449,3 @@ function main() (
 
 # Entry point
 main "$@" || exit $?
-                                                                          
