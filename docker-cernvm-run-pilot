@@ -48,7 +48,7 @@ fi
 
 # Execute the container. For understanding the swap, have a look at:
 # https://github.com/docker/docker/blob/master/docs/sources/reference/run.md
-exec docker run -i -t \
+container_id=$( docker run -d \
   -v /cvmfs/alice.cern.ch:/cvmfs/alice.cern.ch \
   -v /cvmfs/alice-ocdb.cern.ch:/cvmfs/alice-ocdb.cern.ch \
   -v ${pilot}:/condor-cvm-docker-pilot \
@@ -56,5 +56,16 @@ exec docker run -i -t \
   --cpu-shares=${ncpushares} \
   --memory=${mem_share_bytes} \
   --memory-swap=0 \
-  --rm \
-  "$docker_image" "$args"
+  "$docker_image" "$args" )
+r=$?
+
+# Remove the container when done
+# http://stackoverflow.com/questions/24764197/how-can-i-run-containers-detached-and-have-them-automatically-removed-when-they
+if [[ $r == 0 ]] ; then
+  echo 'Waiting for the container to finish...'
+  docker wait "$container_id"
+  docker rm "$container_id"
+  echo 'Done waiting.'
+fi
+
+exit $r
