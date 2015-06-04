@@ -232,6 +232,21 @@ according to your local configuration.
 * Run container in background and not interactively
 * Separate configuration from Pilot script
 
+**TODO**
+
+* Container factory: start containers one after another, using Python possibly
+* See [this](http://stackoverflow.com/questions/8241099/executing-tasks-in-parallel-in-python)
+  for parallel processing, or just use Python threads
+* Advantage: no install/configure Condor on the node. Everything isolated inside
+  a container
+* The same technology can be used as-is for opportunistic computing, volunteer
+  computing and "ordinary" computing
+* Quickly turn dedicated computing resources to something else, then revert back
+* Always the freshest installation of the operating system
+* Put a "drain mode" and possibility to change the number of containers on the
+  fly in the "container factory"
+* "Container factory" is indeed a nice name
+
 
 ## Notes and discussion
 
